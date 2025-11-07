@@ -6,13 +6,20 @@ using System.Text.Json;
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-string connectionString = Environment.GetEnvironmentVariable("AzureStorageConnectionString") 
-    ?? builder.Configuration.GetConnectionString("AzureStorageConnectionString") 
-    ?? throw new Exception("No se encontró la cadena de conexión de Azure Storage.");
+// Leer cadena de conexión
+string? connectionString = Environment.GetEnvironmentVariable("AzureStorageConnectionString") 
+    ?? builder.Configuration.GetConnectionString("AzureStorageConnectionString");
+
+if (string.IsNullOrEmpty(connectionString))
+{
+    Console.WriteLine("⚠️ No se encontró la cadena de conexión de Azure Storage.");
+    throw new Exception("No se encontró la cadena de conexión de Azure Storage.");
+}
 
 var containerName = "logins";
 var blobName = "logins.json";
 
+// --- POST /login ---
 app.MapPost("/login", async (Login login) =>
 {
     login.Fecha = DateTime.Now;
@@ -22,21 +29,26 @@ app.MapPost("/login", async (Login login) =>
     await containerClient.CreateIfNotExistsAsync();
     var blobClient = containerClient.GetBlobClient(blobName);
 
-    List<Login> logins = new();
+    var logins = new List<Login>();
+
     if (await blobClient.ExistsAsync())
     {
         var download = await blobClient.DownloadContentAsync();
-        logins = JsonSerializer.Deserialize<List<Login>>(download.Value.Content.ToString()) ?? new();
+        var content = download.Value.Content.ToString();
+        logins = JsonSerializer.Deserialize<List<Login>>(content) ?? new();
     }
 
     logins.Add(login);
+
     var json = JsonSerializer.Serialize(logins, new JsonSerializerOptions { WriteIndented = true });
     using var ms = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
     await blobClient.UploadAsync(ms, overwrite: true);
 
+    Console.WriteLine("✅ Login almacenado correctamente.");
     return Results.Ok(new { mensaje = "Login almacenado correctamente en Azure Blob Storage" });
 });
 
+// --- GET /logins ---
 app.MapGet("/logins", async (HttpContext context) =>
 {
     var password = context.Request.Query["password"];
