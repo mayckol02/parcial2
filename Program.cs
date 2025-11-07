@@ -4,7 +4,15 @@ using Microsoft.Extensions.Hosting;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddCors();
+
 var app = builder.Build();
+
+app.UseCors(policy =>
+    policy.AllowAnyOrigin()
+          .AllowAnyMethod()
+          .AllowAnyHeader());
 
 // Leer cadena de conexión
 string? connectionString = Environment.GetEnvironmentVariable("AzureStorageConnectionString") 
